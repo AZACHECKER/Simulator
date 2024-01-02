@@ -2,14 +2,16 @@ use std::{env, sync::Arc};
 
 use dashmap::DashMap;
 
-use symunix::{config::config, errors::handle_rejection, simulate_routes, SharedSimulationState};
+use symunix::{
+    config::config,
+    errors::handle_rejection,
+    simulate_routes,
+    SharedSimulationState,
+};
 use warp::Filter;
 
 #[tokio::main]
-#[cfg_attr(
-    not(debug_assertions),
-    tokio::main(flavor = "multi_thread", worker_threads = 4)
-)]
+#[cfg_attr(not(debug_assertions), tokio::main(flavor = "multi_thread", worker_threads = 4))]
 async fn main() {
     if env::var_os("RUST_LOG").is_none() {
         env::set_var("RUST_LOG", "ts::api=debug");
@@ -26,8 +28,7 @@ async fn main() {
         .as_ref()
         .map(|key| {
             log::info!(target: "ts::api", "Running with API key protection");
-            let api_key_filter =
-                warp::header::exact("X-API-KEY", Box::leak(key.clone().into_boxed_str()));
+            let api_key_filter = warp::header::exact("X-API-KEY", Box::leak(key.clone().into_boxed_str()));
             api_base.and(api_key_filter).boxed()
         })
         .unwrap_or_else(|| api_base.boxed());
@@ -41,9 +42,6 @@ async fn main() {
         .recover(handle_rejection)
         .with(warp::log("ts::api"));
 
-    log::info!(
-        target: "ts::api",
-        "Starting server on port {port}"
-    );
+    log::info!(target: "ts::api", "Starting server on port {port}");
     warp::serve(routes).run(([0, 0, 0, 0], port)).await;
 }

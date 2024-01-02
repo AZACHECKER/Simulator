@@ -1,7 +1,7 @@
 use dashmap::DashMap;
-use evm::Evm;
+use structs::Evm;
 use serde::de::DeserializeOwned;
-use simulation::{SimulationRequest, StatefulSimulationRequest};
+use structs::{SimulationRequest, StatefulSimulationRequest};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -10,10 +10,13 @@ use warp::{Filter, Rejection, Reply};
 pub mod config;
 use config::Config;
 
+pub mod structs;
+
 pub mod errors;
 pub mod evm;
 
 pub mod simulation;
+
 
 pub struct SharedSimulationState {
     pub evms: Arc<DashMap<Uuid, Arc<Mutex<Evm>>>>,
