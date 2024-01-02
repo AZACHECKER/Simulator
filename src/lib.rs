@@ -54,11 +54,6 @@ pub fn simulate_bundle(
         .and_then(simulation::simulate_bundle)
 }
 
-/// GET /Welcome
-pub fn welcome() -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
-    warp::path!("Welcome").map(|| "Welcome to the Enso Temper API")
-}
-
 /// POST /simulate-stateful
 pub fn simulate_stateful_new(
     config: Config,
