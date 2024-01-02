@@ -1,12 +1,15 @@
-use std::env;
 use dotenvy::dotenv;
+use std::env;
 
 macro_rules! get_env {
     ($name:expr) => {
         env::var($name).ok().filter(|k| !k.is_empty())
     };
     ($name:expr, $default:expr) => {
-        env::var($name).unwrap_or($default.to_string()).parse().unwrap_or($default)
+        env::var($name)
+            .unwrap_or($default.to_string())
+            .parse()
+            .unwrap_or($default)
     };
 }
 

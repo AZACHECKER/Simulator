@@ -1,19 +1,19 @@
 use std::collections::HashMap;
 
-use ethers::abi::{ Address, Hash, Uint };
+use ethers::abi::{Address, Hash, Uint};
 use ethers::core::types::Log;
 use ethers::types::transaction::eip2930::AccessList;
 use ethers::types::Bytes;
 use foundry_config::Chain;
-use foundry_evm::executor::{ fork::CreateFork, Executor };
-use foundry_evm::executor::{ opts::EvmOpts, Backend, ExecutorBuilder };
-use foundry_evm::trace::identifier::{ EtherscanIdentifier, SignaturesIdentifier };
+use foundry_evm::executor::{fork::CreateFork, Executor};
+use foundry_evm::executor::{opts::EvmOpts, Backend, ExecutorBuilder};
+use foundry_evm::trace::identifier::{EtherscanIdentifier, SignaturesIdentifier};
 use foundry_evm::trace::node::CallTraceNode;
-use foundry_evm::trace::{ CallTraceArena, CallTraceDecoder, CallTraceDecoderBuilder };
-use foundry_evm::utils::{ h160_to_b160, u256_to_ru256 };
+use foundry_evm::trace::{CallTraceArena, CallTraceDecoder, CallTraceDecoderBuilder};
+use foundry_evm::utils::{h160_to_b160, u256_to_ru256};
 use revm::db::DatabaseRef;
 use revm::interpreter::InstructionResult;
-use revm::primitives::{ Account, Bytecode, Env, StorageSlot };
+use revm::primitives::{Account, Bytecode, Env, StorageSlot};
 use revm::DatabaseCommit;
 
 use crate::errors::CustomRejection;
@@ -72,7 +72,7 @@ impl Evm {
         fork_block_number: Option<u64>,
         gas_limit: u64,
         tracing: bool,
-        etherscan_key: Option<String>
+        etherscan_key: Option<String>,
     ) -> Result<Self, CustomRejection> {
         let evm_opts = EvmOpts {
             fork_url: Some(fork_url.clone()),
@@ -125,11 +125,8 @@ impl Evm {
         let etherscan_identifier = EtherscanIdentifier::new(&foundry_config, Some(chain)).ok();
         let mut decoder = CallTraceDecoderBuilder::new().with_verbosity(5).build();
 
-        if
-            let Ok(identifier) = SignaturesIdentifier::new(
-                foundry_config::Config::foundry_cache_dir(),
-                false
-            )
+        if let Ok(identifier) =
+            SignaturesIdentifier::new(foundry_config::Config::foundry_cache_dir(), false)
         {
             decoder.add_signature_identifier(identifier);
         }
@@ -143,15 +140,16 @@ impl Evm {
 
     pub async fn call_raw(
         &mut self,
-        call: CallRawRequest
+        call: CallRawRequest,
     ) -> Result<CallRawResult, CustomRejection> {
         self.set_access_list(call.access_list);
-        let res = self.executor
+        let res = self
+            .executor
             .call_raw(
                 call.from,
                 call.to,
                 call.data.map(|d| d.0).unwrap_or_default(),
-                call.value.unwrap_or_default()
+                call.value.unwrap_or_default(),
             )
             .map_err(|err| {
                 dbg!(&err);
@@ -190,11 +188,12 @@ impl Evm {
         balance: Option<Uint>,
         nonce: Option<u64>,
         code: Option<Bytes>,
-        storage: Option<StorageOverride>
+        storage: Option<StorageOverride>,
     ) -> Result<(), CustomRejection> {
         let address = h160_to_b160(address);
         let mut account = Account {
-            info: self.executor
+            info: self
+                .executor
                 .backend()
                 .basic(address)
                 .map_err(|_| CustomRejection::OverrideError)?
@@ -213,7 +212,9 @@ impl Evm {
         if let Some(storage) = storage {
             self.handle_storage_override(&mut account, storage)?;
         }
-        self.executor.backend_mut().commit([(address, account)].into_iter().collect());
+        self.executor
+            .backend_mut()
+            .commit([(address, account)].into_iter().collect());
 
         Ok(())
     }
@@ -221,35 +222,34 @@ impl Evm {
     fn handle_storage_override(
         &self,
         account: &mut Account,
-        storage: StorageOverride
+        storage: StorageOverride,
     ) -> Result<(), CustomRejection> {
         account.storage_cleared = !storage.diff;
-        account.storage.extend(
-            storage.slots
-                .into_iter()
-                .map(|(key, value)| {
-                    (
-                        u256_to_ru256(Uint::from_big_endian(key.as_bytes())),
-                        StorageSlot::new(u256_to_ru256(value)),
-                    )
-                })
-        );
+        account
+            .storage
+            .extend(storage.slots.into_iter().map(|(key, value)| {
+                (
+                    u256_to_ru256(Uint::from_big_endian(key.as_bytes())),
+                    StorageSlot::new(u256_to_ru256(value)),
+                )
+            }));
         Ok(())
     }
 
     pub async fn call_raw_committing(
         &mut self,
         call: CallRawRequest,
-        gas_limit: u64
+        gas_limit: u64,
     ) -> Result<CallRawResult, CustomRejection> {
         self.executor.set_gas_limit(gas_limit.into());
         self.set_access_list(call.access_list);
-        let res = self.executor
+        let res = self
+            .executor
             .call_raw_committing(
                 call.from,
                 call.to,
                 call.data.unwrap_or_default().0,
-                call.value.unwrap_or_default()
+                call.value.unwrap_or_default(),
             )
             .map_err(|err| {
                 dbg!(&err);
@@ -307,7 +307,8 @@ impl Evm {
     fn set_access_list(&mut self, access_list: Option<AccessList>) {
         self.executor.env_mut().tx.access_list = access_list
             .unwrap_or_default()
-            .0.into_iter()
+            .0
+            .into_iter()
             .map(|item| {
                 (
                     h160_to_b160(item.address),

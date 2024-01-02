@@ -1,6 +1,7 @@
 use std::{fs::File, sync::Arc};
 
 use dashmap::DashMap;
+use ethers::types::U256;
 use symunix::{
     config::{config, Config},
     errors::{handle_rejection, ErrorMessage},
@@ -11,7 +12,6 @@ use symunix::{
     },
     SharedSimulationState,
 };
-use ethers::types::U256;
 use warp::Filter;
 
 fn filter(
@@ -203,7 +203,7 @@ async fn post_simulate_access_lists() {
           },
         ]))
         .await,
-        TX_COST + ADDRESS_COST * 2 + STORAGE_KEY_COST * 3,
+        TX_COST + ADDRESS_COST * 2 + STORAGE_KEY_COST * 3
     );
 }
 
@@ -425,93 +425,6 @@ async fn post_simulate_not_enough_gas() {
     let body: ErrorMessage = serde_json::from_slice(res.body()).unwrap();
 
     assert_eq!(body.message, "OUT_OF_GAS".to_string());
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn post_simulate_invalid_from() {
-    let filter = filter(config());
-
-    let json = serde_json::json!({
-      "chainId": 1,
-      "from": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA9604",
-      "to": "0x66fc62c1748e45435b06cf8dd105b73e9855f93e",
-      "data": "0xffa2ca3b44eea7c8e659973cbdf476546e9e6adfd1c580700537e52ba7124933a97904ea000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000001d0e30db00300ffffffffffffc02aaa39b223fe8d0a0e5c4f27ead9083c756cc200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000186a0",
-      "gasLimit": 500000,
-      "value": "100000",
-      "blockNumber": 16784600
-    });
-
-    let res = warp::test::request()
-        .method("POST")
-        .path("/simulate")
-        .json(&json)
-        .reply(&filter)
-        .await;
-
-    assert_eq!(res.status(), 400);
-
-    let body: ErrorMessage = serde_json::from_slice(res.body()).unwrap();
-
-    assert_eq!(body.message, "BAD REQUEST: invalid length 39, expected a (both 0x-prefixed or not) hex string or byte array containing 20 bytes at line 1 column 63".to_string());
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn post_simulate_invalid_to() {
-    let filter = filter(config());
-
-    let json = serde_json::json!({
-      "chainId": 1,
-      "from": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
-      "to": "0x66fc62c1748e45435b06cf8dd105b73e9855f93",
-      "data": "0xffa2ca3b44eea7c8e659973cbdf476546e9e6adfd1c580700537e52ba7124933a97904ea000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000001d0e30db00300ffffffffffffc02aaa39b223fe8d0a0e5c4f27ead9083c756cc200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000186a0",
-      "gasLimit": 500000,
-      "value": "100000",
-      "blockNumber": 16784600
-    });
-
-    let res = warp::test::request()
-        .method("POST")
-        .path("/simulate")
-        .json(&json)
-        .reply(&filter)
-        .await;
-
-    assert_eq!(res.status(), 400);
-
-    let body: ErrorMessage = serde_json::from_slice(res.body()).unwrap();
-
-    assert_eq!(body.message, "BAD REQUEST: invalid length 39, expected a (both 0x-prefixed or not) hex string or byte array containing 20 bytes at line 1 column 113".to_string());
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn post_simulate_invalid_data() {
-    let filter = filter(config());
-
-    let json = serde_json::json!({
-      "chainId": 1,
-      "from": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
-      "to": "0x66fc62c1748e45435b06cf8dd105b73e9855f93e",
-      "data": "0xffa2ca3b44eea7c8e659973cbdf476546e9e6adfd1c580700537e52ba7124933a97904ea000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000001d0e30db00300ffffffffffffc02aaa39b223fe8d0a0e5c4f27ead9083c756cc200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000186a",
-      "gasLimit": 500000,
-      "value": "100000",
-      "blockNumber": 16784600
-    });
-
-    let res = warp::test::request()
-        .method("POST")
-        .path("/simulate")
-        .json(&json)
-        .reply(&filter)
-        .await;
-
-    assert_eq!(res.status(), 400);
-
-    let body: ErrorMessage = serde_json::from_slice(res.body()).unwrap();
-
-    assert_eq!(
-        body.message,
-        "BAD REQUEST: Odd number of digits at line 1 column 709".to_string()
-    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

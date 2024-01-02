@@ -2,9 +2,7 @@ use std::{env, sync::Arc};
 
 use dashmap::DashMap;
 
-use symunix::{
-    config::config, errors::handle_rejection, simulate_routes, SharedSimulationState,
-};
+use symunix::{config::config, errors::handle_rejection, simulate_routes, SharedSimulationState};
 use warp::Filter;
 
 #[tokio::main]

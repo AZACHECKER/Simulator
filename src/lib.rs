@@ -26,7 +26,10 @@ pub fn simulate_routes(
     let config_ref = &config;
     simulate(config_ref.clone())
         .or(simulate_bundle(config_ref.clone()))
-        .or(simulate_stateful_new(config_ref.clone(), Arc::clone(&state)))
+        .or(simulate_stateful_new(
+            config_ref.clone(),
+            Arc::clone(&state),
+        ))
         .or(simulate_stateful_end(Arc::clone(&state)))
         .or(simulate_stateful(config, Arc::clone(&state)))
 }
