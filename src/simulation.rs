@@ -1,11 +1,11 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use crate::errors::CustomRejection::{
-    IncorrectChainId,
-    InvalidBlockNumbers,
-    MultipleChainIds,
-    NoURLForChainId,
+use crate::errors::{
+    IncorrectChainIdError,
+    InvalidBlockNumbersError,
+    MultipleChainIdsError,
+    NoURLForChainIdError,
     StateNotFound,
 };
 use crate::structs::StorageOverride;
@@ -94,7 +94,7 @@ fn chain_id_to_fork_url(chain_id: u64) -> Result<String, Rejection> {
         // optimism
         10 => Ok("https://mainnet.optimism.io/".to_string()),
         420 => Ok("https://goerli.optimism.io/".to_string()),
-        _ => Err(NoURLForChainId.into()),
+        _ => Err(NoURLForChainIdError.into()),
     }
 }
 
@@ -161,7 +161,7 @@ pub async fn simulate(transaction: SimulationRequest, config: Config) -> Result<
     };
 
     if evm.get_chain_id() != Uint::from(transaction.chain_id) {
-        return Err(warp::reject::custom(IncorrectChainId));
+        return Err(warp::reject::custom(IncorrectChainIdError()));
     }
 
     if let Some(timestamp) = transaction.block_timestamp {
@@ -201,7 +201,7 @@ pub async fn simulate_bundle(
     };
 
     if evm.get_chain_id() != Uint::from(first_chain_id) {
-        return Err(warp::reject::custom(IncorrectChainId));
+        return Err(warp::reject::custom(IncorrectChainIdError()));
     }
 
     if let Some(timestamp) = first_block_timestamp {
@@ -211,12 +211,12 @@ pub async fn simulate_bundle(
     let mut response = Vec::with_capacity(transactions.len());
     for transaction in transactions {
         if transaction.chain_id != first_chain_id {
-            return Err(warp::reject::custom(MultipleChainIds));
+            return Err(warp::reject::custom(MultipleChainIdsError()));
         }
         if transaction.block_number != first_block_number {
             let tx_block = transaction.block_number.expect("Transaction has no block number");
             if transaction.block_number < first_block_number || tx_block < evm.get_block().as_u64() {
-                return Err(warp::reject::custom(InvalidBlockNumbers));
+                return Err(warp::reject::custom(InvalidBlockNumbersError()));
             }
             evm.set_block(tx_block).await.expect("Failed to set block number");
             evm.set_block_timestamp(evm.get_block_timestamp().as_u64() + 12).await.expect(
@@ -278,7 +278,7 @@ pub async fn simulate_stateful_end(
         let response = StatefulSimulationEndResponse { success: true };
         Ok(warp::reply::json(&response))
     } else {
-        Err(warp::reject::custom(StateNotFound))
+        Err(warp::reject::custom(StateNotFound()))
     }
 }
 
@@ -300,12 +300,12 @@ pub async fn simulate_stateful(
     let mut evm = evm.lock().await;
 
     if evm.get_chain_id() != Uint::from(first_chain_id) {
-        return Err(warp::reject::custom(IncorrectChainId));
+        return Err(warp::reject::custom(IncorrectChainIdError()));
     }
 
     for transaction in transactions {
         if transaction.chain_id != first_chain_id {
-            return Err(warp::reject::custom(MultipleChainIds));
+            return Err(warp::reject::custom(MultipleChainIdsError()));
         }
         if
             transaction.block_number != first_block_number ||
@@ -313,7 +313,7 @@ pub async fn simulate_stateful(
         {
             let tx_block = transaction.block_number.expect("Transaction has no block number");
             if transaction.block_number < first_block_number || tx_block < evm.get_block().as_u64() {
-                return Err(warp::reject::custom(InvalidBlockNumbers));
+                return Err(warp::reject::custom(InvalidBlockNumbersError()));
             }
             evm.set_block(tx_block).await?;
             let block_timestamp = evm.get_block_timestamp().as_u64();

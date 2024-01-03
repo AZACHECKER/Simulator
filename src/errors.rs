@@ -1,12 +1,13 @@
 use eyre::Report;
 use serde::{Deserialize, Serialize};
-use std::convert::Infallible;
-use std::error::Error;
-use warp::{
-    http::StatusCode,
-    reject::{Reject, Rejection},
-    Reply,
+use std::{
+    convert::Infallible,
+    error::Error,
+    fmt::{self, Display},
 };
+
+use warp::{body::BodyDeserializeError, hyper::StatusCode, reject::Reject, Rejection, Reply};
+
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ErrorMessage {
@@ -15,61 +16,79 @@ pub struct ErrorMessage {
 }
 
 #[derive(Debug)]
-pub enum CustomRejection {
-    NotFound,
-    StateNotFound,
-    NoURLForChainId,
-    IncorrectChainId,
-    MultipleChainIds,
-    MultipleBlockNumbers,
-    InvalidBlockNumbers,
-    OverrideError,
-    EvmError(Report),
-    MethodNotAllowed,
-    BodyDeserializeError(warp::body::BodyDeserializeError),
-    MissingHeader,
-    FailedLock,
-    FailedInstantiateFork,
-    BadRequest(String),
-    UnhandledRejection,
-}
+pub struct NoURLForChainIdError;
 
-impl Reject for CustomRejection {}
+impl Reject for NoURLForChainIdError {}
+
+
+#[derive(Debug)]
+pub struct IncorrectChainIdError();
+
+impl Reject for IncorrectChainIdError {}
+
+
+#[derive(Debug)]
+pub struct MultipleChainIdsError();
+
+impl Reject for MultipleChainIdsError {}
+
+#[derive(Debug)]
+pub struct MultipleBlockNumbersError();
+
+impl Reject for MultipleBlockNumbersError {}
+
+
+#[derive(Debug)]
+pub struct InvalidBlockNumbersError();
+
+impl Reject for InvalidBlockNumbersError {}
+
+
+#[derive(Debug)]
+pub struct StateNotFound();
+
+impl Reject for StateNotFound {}
+
+
+#[derive(Debug)]
+pub struct OverrideError;
+
+impl Reject for OverrideError {}
+
+
+#[derive(Debug)]
+pub struct EvmError(pub Report);
+
+impl Reject for EvmError {}
+
+
+#[derive(Debug)]
+pub struct FailedInstantiateFork;
+
+impl Reject for FailedInstantiateFork {}
+
 
 pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
-    let (code, message) = match err.find::<CustomRejection>() {
-        Some(CustomRejection::NotFound) => (StatusCode::NOT_FOUND, "NOT_FOUND".to_string()),
-        Some(CustomRejection::StateNotFound) => (StatusCode::NOT_FOUND, "STATE_NOT_FOUND".to_string()),
-        Some(CustomRejection::NoURLForChainId) => (StatusCode::BAD_REQUEST, "CHAIN_ID_NOT_SUPPORTED".to_string()),
-        Some(CustomRejection::IncorrectChainId) => (StatusCode::BAD_REQUEST, "INCORRECT_CHAIN_ID".to_string()),
-        Some(CustomRejection::MultipleChainIds) => (StatusCode::BAD_REQUEST, "MULTIPLE_CHAIN_IDS".to_string()),
-        Some(CustomRejection::MultipleBlockNumbers) => (StatusCode::BAD_REQUEST, "MULTIPLE_BLOCK_NUMBERS".to_string()),
-        Some(CustomRejection::InvalidBlockNumbers) => (StatusCode::BAD_REQUEST, "INVALID_BLOCK_NUMBERS".to_string()),
-        Some(CustomRejection::OverrideError) => (StatusCode::INTERNAL_SERVER_ERROR, "OVERRIDE_ERROR".to_string()),
-        Some(CustomRejection::FailedLock) => (StatusCode::INTERNAL_SERVER_ERROR, "FAILED_LOCK".to_string()),
-        Some(CustomRejection::FailedInstantiateFork) => (StatusCode::INTERNAL_SERVER_ERROR, "FAILED_INSTANTIATE_FORK".to_string()),
-        Some(CustomRejection::EvmError(report)) => {
-            if report.to_string().contains("CallGasCostMoreThanGasLimit") {
-                (StatusCode::BAD_REQUEST, "OUT_OF_GAS".to_string())
-            } else {
-                (StatusCode::INTERNAL_SERVER_ERROR, "EVM_ERROR".to_string())
-            }
-        }
-        Some(CustomRejection::MethodNotAllowed) => (StatusCode::METHOD_NOT_ALLOWED, "METHOD_NOT_ALLOWED".to_string()),
-        Some(CustomRejection::MissingHeader) => (StatusCode::UNAUTHORIZED, "UNAUTHORIZED".to_string()),
-        Some(CustomRejection::BodyDeserializeError(e)) => {
-            let cause = e
-                .source()
-                .and_then(|e| e.downcast_ref::<serde_json::Error>())
-                .and_then(|e| e.source())
-                .and_then(|e| e.downcast_ref::<serde_json::Error>())
-                .map(|e| e.to_string())
-                .unwrap_or_else(|| e.to_string());
+    let (code, message) = match err {
+        e if e.is_not_found() => (StatusCode::NOT_FOUND, "NOT_FOUND".to_string()),
+        e if e.find::<StateNotFound>().is_some() => (StatusCode::NOT_FOUND, "STATE_NOT_FOUND".to_string()),
+        e if e.find::<NoURLForChainIdError>().is_some() => (StatusCode::BAD_REQUEST, "CHAIN_ID_NOT_SUPPORTED".to_string()),
+        e if e.find::<IncorrectChainIdError>().is_some() => (StatusCode::BAD_REQUEST, "INCORRECT_CHAIN_ID".to_string()),
+        e if e.find::<MultipleChainIdsError>().is_some() => (StatusCode::BAD_REQUEST, "MULTIPLE_CHAIN_IDS".to_string()),
+        e if e.find::<MultipleBlockNumbersError>().is_some() => (StatusCode::BAD_REQUEST, "MULTIPLE_BLOCK_NUMBERS".to_string()),
+        e if e.find::<InvalidBlockNumbersError>().is_some() => (StatusCode::BAD_REQUEST, "INVALID_BLOCK_NUMBERS".to_string()),
+        e if e.find::<BodyDeserializeError>().is_some() => {
+            let cause = e.find::<BodyDeserializeError>().unwrap().source().map(|cause| format!("{}", cause)).unwrap_or_default();
             (StatusCode::BAD_REQUEST, format!("BAD REQUEST: {}", cause))
         }
+        e if e.find::<warp::reject::MethodNotAllowed>().is_some() => (StatusCode::METHOD_NOT_ALLOWED, "METHOD_NOT_ALLOWED".to_string()),
+        e if e.find::<warp::reject::MissingHeader>().is_some() => (StatusCode::UNAUTHORIZED, "UNAUTHORIZED".to_string()),
+        e if e.find::<FailedInstantiateFork>().is_some() => (StatusCode::INTERNAL_SERVER_ERROR, "FAILED_INSTANTIATE_FORK".to_string()),
+        //invalid header 
+        e if e.find::<warp::reject::InvalidHeader>().is_some() => (StatusCode::BAD_REQUEST, "INVALID_HEADER".to_string()),
         _ => {
-            eprintln!("unhandled rejection: {:?}", err);
-            (StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR".to_string())
+            eprintln!("Unhandled rejection: {:?}", err);
+            (StatusCode::INTERNAL_SERVER_ERROR, "UNHANDLED_REJECTION".to_string())
         }
     };
 

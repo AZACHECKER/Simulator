@@ -15,8 +15,7 @@ use revm::db::DatabaseRef;
 use revm::primitives::{ Account, Bytecode, Env, StorageSlot };
 use revm::DatabaseCommit;
 
-use crate::errors::CustomRejection;
-use crate::errors::CustomRejection::EvmError;
+use crate::errors::{EvmError, OverrideError, FailedInstantiateFork};
 use crate::structs::CallTrace;
 
 use crate::structs::{
@@ -46,7 +45,7 @@ impl Evm {
         gas_limit: u64,
         tracing: bool,
         etherscan_key: Option<String>
-    ) -> Result<Self, CustomRejection> {
+    ) -> Result<Self, FailedInstantiateFork> {
         let evm_opts = EvmOpts {
             fork_url: Some(fork_url.clone()),
             fork_block_number,
@@ -66,7 +65,7 @@ impl Evm {
             Ok(envi) => envi,
             Err(err) => {
                 eprintln!("Failed to instantiate forked environment: {}", err);
-                return Err(CustomRejection::FailedInstantiateFork);
+                return Err(FailedInstantiateFork);
             }
         };
 
@@ -117,7 +116,7 @@ impl Evm {
     pub async fn call_raw(
         &mut self,
         call: CallRawRequest
-    ) -> Result<CallRawResult, CustomRejection> {
+    ) -> Result<CallRawResult, EvmError> {
         self.set_access_list(call.access_list);
         let res = self.executor
             .call_raw(
@@ -164,13 +163,13 @@ impl Evm {
         nonce: Option<u64>,
         code: Option<Bytes>,
         storage: Option<StorageOverride>
-    ) -> Result<(), CustomRejection> {
+    ) -> Result<(), OverrideError> {
         let address = h160_to_b160(address);
         let mut account = Account {
             info: self.executor
                 .backend()
                 .basic(address)
-                .map_err(|_| CustomRejection::OverrideError)?
+                .map_err(|_| OverrideError)?
                 .unwrap_or_default(),
             ..Account::new_not_existing()
         };
@@ -195,7 +194,7 @@ impl Evm {
         &self,
         account: &mut Account,
         storage: StorageOverride
-    ) -> Result<(), CustomRejection> {
+    ) -> Result<(), OverrideError> {
         account.storage_cleared = !storage.diff;
         account.storage.extend(
             storage.slots
@@ -214,7 +213,7 @@ impl Evm {
         &mut self,
         call: CallRawRequest,
         gas_limit: u64
-    ) -> Result<CallRawResult, CustomRejection> {
+    ) -> Result<CallRawResult, EvmError> {
         self.executor.set_gas_limit(gas_limit.into());
         self.set_access_list(call.access_list);
         let res = self.executor
@@ -255,7 +254,7 @@ impl Evm {
         })
     }
 
-    pub async fn set_block(&mut self, number: u64) -> Result<(), CustomRejection> {
+    pub async fn set_block(&mut self, number: u64) -> Result<(), EvmError> {
         self.executor.env_mut().block.number = Uint::from(number).into();
         Ok(())
     }
@@ -264,7 +263,7 @@ impl Evm {
         self.executor.env().block.number.into()
     }
 
-    pub async fn set_block_timestamp(&mut self, timestamp: u64) -> Result<(), CustomRejection> {
+    pub async fn set_block_timestamp(&mut self, timestamp: u64) -> Result<(), EvmError> {
         self.executor.env_mut().block.timestamp = Uint::from(timestamp).into();
         Ok(())
     }
