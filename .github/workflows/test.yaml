@@ -4,11 +4,6 @@ on:
       - main
   pull_request:
 
-name: test
-
-env:
-  CARGO_TERM_COLOR: always
-  
 jobs:
   test:
     name: testing ${{ matrix.job.os }} (${{ matrix.job.target }})
