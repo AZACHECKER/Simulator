@@ -3,12 +3,12 @@ use std::{fs::File, sync::Arc, io::Write};
 use dashmap::DashMap;
 use ethers::types::U256;
 use symunix::{
-    config::{config, Config},
-    errors::{handle_rejection, ErrorMessage},
+    config::config,
+    errors::handle_rejection,
     simulate_routes,
     structs::{
         SimulationRequest, SimulationResponse, StatefulSimulationEndResponse,
-        StatefulSimulationResponse,
+        StatefulSimulationResponse, ErrorMessage, Config,
     },
     SharedSimulationState,
 };
