@@ -6,6 +6,10 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 use warp::{Filter, Rejection, Reply};
+use serde_json::json;
+
+pub mod banner;
+use banner::BANNER;
 
 pub mod config;
 use structs::Config;
@@ -35,6 +39,9 @@ pub fn simulate_routes(
         ))
         .or(simulate_stateful_end(Arc::clone(&state)))
         .or(simulate_stateful(config, Arc::clone(&state)))
+        .or(index_route())
+        .or(status_route()) 
+        .or(version_route())
 }
 
 /// POST /simulate
@@ -44,6 +51,15 @@ pub fn simulate(config: Config) -> impl Filter<Extract = (impl Reply,), Error = 
         .and(json_body::<SimulationRequest>(&config))
         .and(with_config(config))
         .and_then(simulation::simulate)
+}
+
+/// GET index
+fn index_route() -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
+    warp::path::end()
+        .and(warp::get())
+        .map(|| {
+            BANNER
+        })
 }
 
 /// POST /simulate-bundle
@@ -90,6 +106,26 @@ pub fn simulate_stateful(
         .and(json_body(&config))
         .and(with_state(state))
         .and_then(simulation::simulate_stateful)
+}
+
+/// GET /status
+fn status_route() -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
+    warp::path("status")
+        .and(warp::get())
+        .map(|| {
+            let status = json!({ "status": "Server is online" });
+            warp::reply::json(&status)
+        })
+}
+
+/// GET /version
+fn version_route() -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
+    warp::path("version")
+        .and(warp::get())
+        .map(|| {
+            let version = json!({ "version": "v0.1.2" });
+            warp::reply::json(&version)
+        })
 }
 
 fn with_config(

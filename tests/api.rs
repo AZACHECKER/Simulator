@@ -8,7 +8,7 @@ use symunix::{
     simulate_routes,
     structs::{
         SimulationRequest, SimulationResponse, StatefulSimulationEndResponse,
-        StatefulSimulationResponse, ErrorMessage, Config,
+        StatefulSimulationResponse, ErrorMessage, Config
     },
     SharedSimulationState,
 };
