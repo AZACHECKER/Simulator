@@ -6,7 +6,7 @@ use symunix::{
     config::{config, Config},
     errors::{handle_rejection, ErrorMessage},
     simulate_routes,
-    simulation::{
+    structs::{
         SimulationRequest, SimulationResponse, StatefulSimulationEndResponse,
         StatefulSimulationResponse,
     },

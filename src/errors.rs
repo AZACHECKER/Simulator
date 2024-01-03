@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use std::{
     convert::Infallible,
     error::Error,
-    fmt::{self, Display},
 };
 
 use warp::{body::BodyDeserializeError, hyper::StatusCode, reject::Reject, Rejection, Reply};
@@ -86,6 +85,19 @@ pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> 
         e if e.find::<FailedInstantiateFork>().is_some() => (StatusCode::INTERNAL_SERVER_ERROR, "FAILED_INSTANTIATE_FORK".to_string()),
         //invalid header 
         e if e.find::<warp::reject::InvalidHeader>().is_some() => (StatusCode::BAD_REQUEST, "INVALID_HEADER".to_string()),
+        //evm error
+        e if e.find::<EvmError>().is_some() => {
+            let (code, message);
+            if e.find::<EvmError>().unwrap().0.to_string().contains("CallGasCostMoreThanGasLimit") {
+                code = StatusCode::BAD_REQUEST;
+                message = "OUT_OF_GAS".to_string();
+            } else {
+                code = StatusCode::INTERNAL_SERVER_ERROR;
+                message = "EVM_ERROR".to_string();
+            }
+
+            (code, message)
+        }
         _ => {
             eprintln!("Unhandled rejection: {:?}", err);
             (StatusCode::INTERNAL_SERVER_ERROR, "UNHANDLED_REJECTION".to_string())
