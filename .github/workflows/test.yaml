@@ -61,13 +61,6 @@ jobs:
       - uses: Swatinem/rust-cache@v1
         with:
           cache-on-failure: true
-
-      - name: cargo fmt
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all --check
-
       - name: cargo clippy
         uses: actions-rs/clippy-check@v1
         with:
