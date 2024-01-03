@@ -1,4 +1,4 @@
-use std::{fs::File, sync::Arc};
+use std::{fs::File, sync::Arc, io::Write};
 
 use dashmap::DashMap;
 use ethers::types::U256;
@@ -87,8 +87,8 @@ async fn post_simulate_file_etherscan() {
     assert_eq!(res.status(), 200);
 
     // Uncomment to create new file, if you've made changes to the expected response
-    // let mut file = File::create("tests/expected_etherscan.json").expect("file should open write only");
-    // file.write_all(res.body()).expect("file should be written");
+    let mut file = File::create("tests/expected_etherscan.json").expect("file should open write only");
+    file.write_all(res.body()).expect("file should be written");
 
     let body: SimulationResponse = serde_json::from_slice(res.body()).unwrap();
 
