@@ -1,6 +1,8 @@
 use dotenvy::dotenv;
 use std::env;
 
+use crate::structs::Config;
+
 macro_rules! get_env {
     ($name:expr) => {
         env::var($name).ok().filter(|k| !k.is_empty())
@@ -11,15 +13,6 @@ macro_rules! get_env {
             .parse()
             .unwrap_or($default)
     };
-}
-
-#[derive(Debug, Clone)]
-pub struct Config {
-    pub port: u16,
-    pub fork_url: Option<String>,
-    pub etherscan_key: Option<String>,
-    pub api_key: Option<String>,
-    pub max_request_size: u64,
 }
 
 pub fn config() -> Config {

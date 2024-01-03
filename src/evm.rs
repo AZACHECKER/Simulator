@@ -14,8 +14,6 @@ use foundry_evm::utils::{ h160_to_b160, u256_to_ru256 };
 use revm::db::DatabaseRef;
 use revm::primitives::{ Account, Bytecode, Env, StorageSlot };
 use revm::DatabaseCommit;
-
-use crate::errors::{EvmError, OverrideError, FailedInstantiateFork};
 use crate::structs::CallTrace;
 
 use crate::structs::{
@@ -23,6 +21,9 @@ use crate::structs::{
     CallRawResult,
     StorageOverride,
     Evm,
+    EvmError, 
+    OverrideError, 
+    FailedInstantiateFork,
 };
 
 impl From<CallTraceNode> for CallTrace {

@@ -1,13 +1,5 @@
 use std::str::FromStr;
 use std::sync::Arc;
-
-use crate::errors::{
-    IncorrectChainIdError,
-    InvalidBlockNumbersError,
-    MultipleChainIdsError,
-    NoURLForChainIdError,
-    StateNotFound,
-};
 use crate::structs::StorageOverride;
 use crate::SharedSimulationState;
 use dashmap::mapref::one::RefMut;
@@ -27,9 +19,15 @@ use crate::structs::{
         CallTrace,
         PermissiveUint,
         State,
+        IncorrectChainIdError,
+        InvalidBlockNumbersError,
+        MultipleChainIdsError,
+        NoURLForChainIdError,
+        StateNotFound,
+        FailedToSetBlockTimestamp,
     };
 
-use super::config::Config;
+use super::structs::Config;
 use super::structs::{ CallRawRequest, Evm };
 
 impl From<State> for StorageOverride {
@@ -141,31 +139,28 @@ async fn run(
 }
 
 pub async fn simulate(transaction: SimulationRequest, config: Config) -> Result<Json, Rejection> {
-    let fork_url = config.fork_url.unwrap_or(chain_id_to_fork_url(transaction.chain_id)?);
+    let fork_url = config
+        .fork_url
+        .map_or_else(|| chain_id_to_fork_url(transaction.chain_id), Ok)?;
 
-    // Obtain the EVM from the Result<Evm, CustomRejection>.
-    let mut evm = match
-        Evm::new(
-            None,
-            fork_url,
-            transaction.block_number,
-            transaction.gas_limit,
-            true,
-            config.etherscan_key
-        )
-    {
-        Ok(evm) => evm, // Successfully obtained the EVM.
-        Err(err) => {
-            return Err(warp::reject::custom(err));
-        } // Return the rejection error.
-    };
+    let mut evm = Evm::new(
+        None,
+        fork_url,
+        transaction.block_number,
+        transaction.gas_limit,
+        true,
+        config.etherscan_key,
+    )
+    .map_err(|err| warp::reject::custom(err))?;
 
     if evm.get_chain_id() != Uint::from(transaction.chain_id) {
         return Err(warp::reject::custom(IncorrectChainIdError()));
     }
 
     if let Some(timestamp) = transaction.block_timestamp {
-        evm.set_block_timestamp(timestamp).await.expect("failed to set block timestamp");
+        evm.set_block_timestamp(timestamp)
+            .await
+            .map_err(|_| warp::reject::custom(FailedToSetBlockTimestamp))?;
     }
 
     let response = run(&mut evm, transaction, false).await?;
@@ -208,23 +203,8 @@ pub async fn simulate_bundle(
         evm.set_block_timestamp(timestamp).await.expect("failed to set block timestamp");
     }
 
-    let mut response = Vec::with_capacity(transactions.len());
-    for transaction in transactions {
-        if transaction.chain_id != first_chain_id {
-            return Err(warp::reject::custom(MultipleChainIdsError()));
-        }
-        if transaction.block_number != first_block_number {
-            let tx_block = transaction.block_number.expect("Transaction has no block number");
-            if transaction.block_number < first_block_number || tx_block < evm.get_block().as_u64() {
-                return Err(warp::reject::custom(InvalidBlockNumbersError()));
-            }
-            evm.set_block(tx_block).await.expect("Failed to set block number");
-            evm.set_block_timestamp(evm.get_block_timestamp().as_u64() + 12).await.expect(
-                "Failed to set block timestamp"
-            );
-        }
-        response.push(run(&mut evm, transaction, true).await?);
-    }
+    let response = Vec::with_capacity(transactions.len());
+    let response = process_transactions(&mut evm, transactions, response).await?;
 
     Ok(warp::reply::json(&response))
 }
@@ -288,9 +268,8 @@ pub async fn simulate_stateful(
     state: Arc<SharedSimulationState>
 ) -> Result<Json, Rejection> {
     let first_chain_id = transactions[0].chain_id;
-    let first_block_number = transactions[0].block_number;
 
-    let mut response = Vec::with_capacity(transactions.len());
+    let response = Vec::with_capacity(transactions.len());
 
     let evm_ref_mut: RefMut<'_, Uuid, Arc<Mutex<Evm>>> = state.evms
         .get_mut(&param)
@@ -303,6 +282,19 @@ pub async fn simulate_stateful(
         return Err(warp::reject::custom(IncorrectChainIdError()));
     }
 
+    let response = process_transactions(&mut evm, transactions, response).await?;
+
+    Ok(warp::reply::json(&response))
+}
+
+async fn process_transactions(
+    evm: &mut Evm,
+    transactions: Vec<SimulationRequest>,
+    mut response: Vec<SimulationResponse>,
+) -> Result<Vec<SimulationResponse>, Rejection> {
+    let first_chain_id = transactions[0].chain_id;
+    let first_block_number = transactions[0].block_number;
+
     for transaction in transactions {
         if transaction.chain_id != first_chain_id {
             return Err(warp::reject::custom(MultipleChainIdsError()));
@@ -310,17 +302,18 @@ pub async fn simulate_stateful(
         if
             transaction.block_number != first_block_number ||
             transaction.block_number.unwrap() != evm.get_block().as_u64()
-        {
-            let tx_block = transaction.block_number.expect("Transaction has no block number");
-            if transaction.block_number < first_block_number || tx_block < evm.get_block().as_u64() {
-                return Err(warp::reject::custom(InvalidBlockNumbersError()));
+            {
+                let tx_block = transaction.block_number.expect("Transaction has no block number");
+                if transaction.block_number < first_block_number || tx_block < evm.get_block().as_u64() {
+                    return Err(warp::reject::custom(InvalidBlockNumbersError()));
+                }
+                evm.set_block(tx_block).await.expect("Failed to set block number");
+                evm.set_block_timestamp(evm.get_block_timestamp().as_u64() + 12).await.expect(
+                    "Failed to set block timestamp"
+                );
             }
-            evm.set_block(tx_block).await?;
-            let block_timestamp = evm.get_block_timestamp().as_u64();
-            evm.set_block_timestamp(block_timestamp + 12).await?;
+            response.push(run(evm, transaction, true).await?);
         }
-        response.push(run(&mut evm, transaction, true).await?);
-    }
 
-    Ok(warp::reply::json(&response))
+        Ok(response)
 }

@@ -8,7 +8,7 @@ use uuid::Uuid;
 use warp::{Filter, Rejection, Reply};
 
 pub mod config;
-use config::Config;
+use structs::Config;
 
 pub mod structs;
 
