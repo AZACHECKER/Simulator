@@ -4,65 +4,68 @@ on:
       - main
   pull_request:
 
-name: test
-
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
   test:
-    name: testing ${{ matrix.job.os }} (${{ matrix.job.target }})
-    runs-on: ${{ matrix.job.os }}
-    strategy:
-      matrix:
-        job:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-          - os: macos-latest
-            target: x86_64-apple-darwin
-
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
-
-      # cache rpc requests
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          target: ${{ matrix.job.target }}
-          profile: minimal
-          override: true
-
-      - uses: Swatinem/rust-cache@v1
-        with:
-          cache-on-failure: true
-
-      - name: Cargo test
-        run: cargo test
-
-  lint:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
     steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
+      - uses: actions/checkout@v2
 
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
+      - name: Metadata
+        id: metadata
+        uses: docker/metadata-action@v4
         with:
-          toolchain: stable
-          profile: minimal
-          components: rustfmt, clippy
-          override: true
+          images: ghcr.io/${{ github.repository }}
+          labels: |
+            org.opencontainers.image.licenses=MIT
 
-      - uses: Swatinem/rust-cache@v1
+      - name: Build and push
+        uses: docker/build-push-action@v4
         with:
-          cache-on-failure: true
-      - name: cargo clippy
-        uses: actions-rs/clippy-check@v1
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: docker/login-action@v2
         with:
-          args: --all --all-features -- -D warnings
-          token: ${{ secrets.GITHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Metadata
+        id: metadata
+        uses: docker/metadata-action@v4
+        with:
+          images: ghcr.io/${{ github.repository }}
+          labels: |
+            org.opencontainers.image.licenses=MIT
+
+      - name: Build and push
+        uses: docker/build-push-action@v4
+        with:
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+
+      - name: Deploy
+        uses: docker/deploy-action@v1
+        with:
+          name: ghcr.io/${{ github.repository }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          packages: |
+            ghcr.io/${{ github.repository }}
+
+            
